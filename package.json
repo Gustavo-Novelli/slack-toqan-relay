@@ -1,0 +1,6 @@
+{
+  "name": "slack-toqan-relay",
+  "version": "1.0.0",
+  "description": "Relay Slack para Toqan",
+  "dependencies": {}
+}
