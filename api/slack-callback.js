@@ -45,8 +45,13 @@ module.exports = async (req, res) => {
       // ================================
       // CHAMAR WEBHOOK DO TOQAN
       // ================================
-      const toqanWebhookUrl = 'https://api.toqan.ai/webhook/task_000000DHBPWw2c0aMDGILetulGZof';
-      const toqanSecret = 'whsec_000000DHBPWw2c0aMDGILetulGZog';
+      const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
+      const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
+
+      if (!toqanWebhookUrl || !toqanSecret) {
+        console.error('❌ Variáveis de ambiente não configuradas');
+        return res.status(500).json({ error: 'Server configuration error' });
+      }
 
       console.log('🤖 Chamando webhook Toqan...');
 
@@ -58,6 +63,7 @@ module.exports = async (req, res) => {
           'X-Webhook-Secret': toqanSecret
         },
         body: JSON.stringify({ 
+          message: `Solicitação de plano de ação para a issue ${issueKey}`,
           issue_key: issueKey, 
           user_id: userId 
         })
