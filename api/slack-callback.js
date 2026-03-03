@@ -1,5 +1,4 @@
 module.exports = async (req, res) => {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   
   if (req.method === 'OPTIONS') {
@@ -13,24 +12,17 @@ module.exports = async (req, res) => {
   try {
     console.log('📥 Requisição recebida do Slack');
     
-    // Parse payload do Slack
     let payload = req.body.payload 
       ? (typeof req.body.payload === 'string' ? JSON.parse(req.body.payload) : req.body.payload)
       : req.body;
 
     console.log('Tipo de payload:', payload.type);
 
-    // ================================
-    // VALIDAÇÃO INICIAL (url_verification)
-    // ================================
     if (payload.type === 'url_verification') {
       console.log('✅ Respondendo ao challenge do Slack');
       return res.status(200).json({ challenge: payload.challenge });
     }
 
-    // ================================
-    // CALLBACK DO BOTÃO (block_actions)
-    // ================================
     if (payload.type === 'block_actions') {
       const userId = payload.user?.id;
       const issueKey = payload.actions?.[0]?.value;
@@ -42,43 +34,37 @@ module.exports = async (req, res) => {
 
       console.log(`✅ Issue: ${issueKey}, User: ${userId}`);
 
-      // ================================
-      // CHAMAR WEBHOOK DO TOQAN
-      // ================================
-      const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
-      const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
+      const appsScriptUrl = process.env.APPS_SCRIPT_URL;
+      const apiKey = process.env.APPS_SCRIPT_API_KEY;
 
-      if (!toqanWebhookUrl || !toqanSecret) {
+      if (!appsScriptUrl || !apiKey) {
         console.error('❌ Variáveis de ambiente não configuradas');
         return res.status(500).json({ error: 'Server configuration error' });
       }
 
-      console.log('🤖 Chamando webhook Toqan...');
+      console.log('🤖 Chamando Google Apps Script...');
 
-      // Fire and forget (não espera resposta)
-      fetch(toqanWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Webhook-Secret': toqanSecret
-        },
-        body: JSON.stringify({ 
-          message: `Solicitação de plano de ação para a issue ${issueKey}`,
-          issue_key: issueKey, 
-          user_id: userId 
-        })
-      }).then(response => {
-        console.log(`✅ Toqan webhook respondeu: HTTP ${response.status}`);
-        return response.text();
-      }).then(text => {
-        console.log(`Resposta Toqan: ${text}`);
-      }).catch(error => {
-        console.error('❌ Erro ao chamar Toqan:', error.message);
-      });
+      try {
+        const response = await fetch(appsScriptUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            api_key: apiKey,
+            issueKey: issueKey,
+            slackUserId: userId
+          })
+        });
 
-      // ================================
-      // RESPONDER AO SLACK (< 3 segundos)
-      // ================================
+        const responseText = await response.text();
+        console.log(`✅ Apps Script respondeu: HTTP ${response.status}`);
+        console.log(`Resposta: ${responseText}`);
+
+      } catch (error) {
+        console.error('❌ Erro ao chamar Apps Script:', error.message);
+      }
+
       console.log('✅ Respondendo ao Slack');
       return res.status(200).json({
         replace_original: false,
@@ -86,7 +72,6 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Outros tipos de payload
     console.log('⚠️ Tipo não reconhecido:', payload.type);
     return res.status(200).json({ ok: true });
 
