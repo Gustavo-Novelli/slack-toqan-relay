@@ -1,6 +1,0 @@
-{
-  "name": "slack-toqan-relay",
-  "version": "1.0.0",
-  "type": "module",
-  "description": "Relay Slack para Toqan"
-}
