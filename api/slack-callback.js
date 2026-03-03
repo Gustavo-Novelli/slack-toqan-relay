@@ -45,8 +45,8 @@ module.exports = async (req, res) => {
       // ================================
       // CHAMAR WEBHOOK DO TOQAN
       // ================================
-      const toqanWebhookUrl = 'https://api.toqan.ai/webhook/task_000000DHBB1DXOcF0LeymXhLf2bYP';
-      const toqanSecret = 'whsec_000000DHBB1DXOcF0LeymXhLf2bYQ';
+      const toqanWebhookUrl = 'https://api.toqan.ai/webhook/task_000000DHBPWw2c0aMDGILetulGZof';
+      const toqanSecret = 'whsec_000000DHBPWw2c0aMDGILetulGZog';
 
       console.log('🤖 Chamando webhook Toqan...');
 
