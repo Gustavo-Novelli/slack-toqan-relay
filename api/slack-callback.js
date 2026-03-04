@@ -34,35 +34,49 @@ module.exports = async (req, res) => {
 
       console.log(`✅ Issue: ${issueKey}, User: ${userId}`);
 
-      const appsScriptUrl = process.env.APPS_SCRIPT_URL;
-      const apiKey = process.env.APPS_SCRIPT_API_KEY;
+      const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
+      const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
 
-      if (!appsScriptUrl || !apiKey) {
+      // Log das variáveis (primeiros caracteres apenas)
+      console.log(`Webhook URL: ${toqanWebhookUrl?.substring(0, 40)}...`);
+      console.log(`Secret: ${toqanSecret?.substring(0, 15)}...`);
+
+      if (!toqanWebhookUrl || !toqanSecret) {
         console.error('❌ Variáveis de ambiente não configuradas');
         return res.status(500).json({ error: 'Server configuration error' });
       }
 
-      console.log('🤖 Chamando Google Apps Script...');
+      const toqanPayload = {
+        message: `Solicitação de plano de ação para a issue ${issueKey}`,
+        issue_key: issueKey,
+        user_id: userId
+      };
+
+      console.log('📤 Payload enviado ao Toqan:', JSON.stringify(toqanPayload));
+      console.log('🤖 Chamando Toqan webhook...');
 
       try {
-        const response = await fetch(appsScriptUrl, {
+        const response = await fetch(toqanWebhookUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': toqanSecret
           },
-          body: JSON.stringify({ 
-            api_key: apiKey,
-            issueKey: issueKey,
-            slackUserId: userId
-          })
+          body: JSON.stringify(toqanPayload)
         });
 
         const responseText = await response.text();
-        console.log(`✅ Apps Script respondeu: HTTP ${response.status}`);
-        console.log(`Resposta: ${responseText}`);
+        
+        console.log(`✅ Toqan respondeu: HTTP ${response.status}`);
+        console.log(`Resposta completa: ${responseText}`);
 
-      } catch (error) {
-        console.error('❌ Erro ao chamar Apps Script:', error.message);
+        if (!response.ok) {
+          console.error(`❌ Toqan retornou erro ${response.status}: ${responseText}`);
+        }
+
+      } catch (fetchError) {
+        console.error('❌ Erro ao chamar Toqan:', fetchError.message);
+        console.error('Stack:', fetchError.stack);
       }
 
       console.log('✅ Respondendo ao Slack');
@@ -76,11 +90,11 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true });
 
   } catch (error) {
-    console.error('❌ Erro no processamento:', error);
+    console.error('❌ Erro geral:', error.message);
+    console.error('Stack:', error.stack);
     return res.status(500).json({ 
       error: error.message,
       text: "❌ Erro ao processar solicitação."
     });
   }
 };
-
