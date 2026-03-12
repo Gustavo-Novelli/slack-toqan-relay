@@ -24,137 +24,68 @@ module.exports = async (req, res) => {
     }
 
     if (payload.type === 'block_actions') {
-      const action = payload.actions[0];
-      const actionId = action.action_id;
       const userId = payload.user?.id;
-      const issueKey = action.value;
-      const responseUrl = payload.response_url;
+      const issueKey = payload.actions?.[0]?.value;
 
-      console.log(`Action ID: ${actionId}`);
-      console.log(`Issue: ${issueKey}, User: ${userId}`);
-
-      // ============================================
-      // BOTÃO: SOLICITAR SUGESTÃO IA
-      // ============================================
-      if (actionId === 'solicitar_sugestao') {
-        
-        if (!userId || !issueKey) {
-          console.error('❌ Dados faltando:', { userId, issueKey });
-          return res.status(400).json({ error: 'Missing data' });
-        }
-
-        console.log('🤖 Botão IA clicado!');
-
-        // ✅ 1. RESPONDE WEBHOOK IMEDIATAMENTE
-        res.status(200).json({ ok: true });
-        console.log('✅ Webhook respondido');
-
-        // ✅ 2. ATUALIZA MENSAGEM ORIGINAL (REMOVE BOTÃO IA)
-        if (responseUrl) {
-          try {
-            const originalBlocks = payload.message?.blocks || [];
-            
-            // Remove apenas o botão de IA, mantém os outros
-            const blocksAtualizados = originalBlocks.map(block => {
-              if (block.type === 'actions') {
-                return {
-                  type: "actions",
-                  elements: block.elements.filter(el => el.action_id !== 'solicitar_sugestao')
-                };
-              }
-              return block;
-            });
-
-            await fetch(responseUrl, {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({
-                replace_original: true,
-                blocks: blocksAtualizados
-              })
-            });
-            
-            console.log('✅ Botão de IA removido da mensagem original');
-          } catch (err) {
-            console.error('❌ Erro ao atualizar mensagem:', err.message);
-          }
-        }
-
-        // ✅ 3. ENVIA MENSAGEM NOVA DE LOADING
-        const slackBotToken = process.env.SLACK_BOT_TOKEN;
-        
-        if (slackBotToken) {
-          try {
-            await fetch('https://slack.com/api/chat.postMessage', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${slackBotToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                channel: userId,
-                text: `⏳ *Processando sugestão de plano de ação para ${issueKey}...*\n\nA IA está analisando o contexto da issue. Você receberá a resposta em instantes!`
-              })
-            });
-            console.log('✅ Mensagem de loading enviada');
-          } catch (err) {
-            console.error('❌ Erro ao enviar mensagem de loading:', err.message);
-          }
-        } else {
-          console.error('⚠️ SLACK_BOT_TOKEN não configurado');
-        }
-
-        // ✅ 4. CHAMA TOQAN (IA)
-        const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
-        const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
-
-        if (!toqanWebhookUrl || !toqanSecret) {
-          console.error('❌ Variáveis Toqan não configuradas');
-          return;
-        }
-
-        const toqanPayload = {
-          message: `Solicitação de plano de ação para a issue ${issueKey}`,
-          issue_key: issueKey,
-          user_id: userId
-        };
-
-        console.log('🤖 Chamando Toqan webhook...');
-        console.log('📤 Payload:', JSON.stringify(toqanPayload));
-
-        try {
-          const response = await fetch(toqanWebhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Webhook-Secret': toqanSecret
-            },
-            body: JSON.stringify(toqanPayload)
-          });
-
-          const responseText = await response.text();
-          
-          console.log(`✅ Toqan respondeu: HTTP ${response.status}`);
-          console.log(`Resposta: ${responseText}`);
-
-          if (!response.ok) {
-            console.error(`❌ Toqan erro ${response.status}: ${responseText}`);
-          }
-
-        } catch (fetchError) {
-          console.error('❌ Erro ao chamar Toqan:', fetchError.message);
-          console.error('Stack:', fetchError.stack);
-        }
-
-        return;
+      if (!userId || !issueKey) {
+        console.error('❌ Dados faltando:', { userId, issueKey });
+        return res.status(400).json({ error: 'Missing data' });
       }
 
-      // Outros action_ids podem vir aqui no futuro
-      console.log('⚠️ action_id não reconhecido:', actionId);
-      return res.status(200).json({ ok: true });
+      console.log(`✅ Issue: ${issueKey}, User: ${userId}`);
+
+      const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
+      const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
+
+      console.log(`Webhook URL: ${toqanWebhookUrl?.substring(0, 40)}...`);
+      console.log(`Secret: ${toqanSecret?.substring(0, 15)}...`);
+
+      if (!toqanWebhookUrl || !toqanSecret) {
+        console.error('❌ Variáveis de ambiente não configuradas');
+        return res.status(500).json({ error: 'Server configuration error' });
+      }
+
+      const toqanPayload = {
+        message: `Solicitação de plano de ação para a issue ${issueKey}`,
+        issue_key: issueKey,
+        user_id: userId
+      };
+
+      console.log('📤 Payload enviado ao Toqan:', JSON.stringify(toqanPayload));
+      console.log('🤖 Chamando Toqan webhook...');
+
+      try {
+        const response = await fetch(toqanWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': toqanSecret
+          },
+          body: JSON.stringify(toqanPayload)
+        });
+
+        const responseText = await response.text();
+        
+        console.log(`✅ Toqan respondeu: HTTP ${response.status}`);
+        console.log(`Resposta completa: ${responseText}`);
+
+        if (!response.ok) {
+          console.error(`❌ Toqan retornou erro ${response.status}: ${responseText}`);
+        }
+
+      } catch (fetchError) {
+        console.error('❌ Erro ao chamar Toqan:', fetchError.message);
+        console.error('Stack:', fetchError.stack);
+      }
+
+      console.log('✅ Respondendo ao Slack');
+      return res.status(200).json({
+        replace_original: false,
+        text: "✅ Solicitação enviada! Você receberá a sugestão de plano de ação em instantes..."
+      });
     }
 
-    console.log('⚠️ Tipo de payload não reconhecido:', payload.type);
+    console.log('⚠️ Tipo não reconhecido:', payload.type);
     return res.status(200).json({ ok: true });
 
   } catch (error) {
