@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
       const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
       const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
 
+      // Log das variáveis (primeiros caracteres apenas)
       console.log(`Webhook URL: ${toqanWebhookUrl?.substring(0, 40)}...`);
       console.log(`Secret: ${toqanSecret?.substring(0, 15)}...`);
 
@@ -78,10 +79,41 @@ module.exports = async (req, res) => {
         console.error('Stack:', fetchError.stack);
       }
 
-      console.log('✅ Respondendo ao Slack');
+      console.log('✅ Respondendo ao Slack com loading state');
+
+      // Pega os blocos originais da mensagem
+      const originalBlocks = payload.message?.blocks || [];
+
+      // Atualiza apenas o bloco de botões, desabilitando o botão de IA
+      const blocksAtualizados = originalBlocks.map(block => {
+        if (block.type === 'actions') {
+          return {
+            type: "actions",
+            elements: block.elements.map(el => {
+              // Se for o botão de solicitar IA, desabilita
+              if (el.action_id === 'solicitar_sugestao') {
+                return {
+                  type: "button",
+                  text: {
+                    type: "plain_text", 
+                    text: "⏳ Processando IA..."
+                  },
+                  style: "primary",
+                  action_id: "disabled_processing" // action_id diferente = não clicável
+                };
+              }
+              // Mantém outros botões intactos
+              return el;
+            })
+          };
+        }
+        // Mantém outros blocos sem alteração
+        return block;
+      });
+
       return res.status(200).json({
-        replace_original: false,
-        text: "✅ Solicitação enviada! Você receberá a sugestão de plano de ação em instantes..."
+        replace_original: true,  // Substitui a mensagem original
+        blocks: blocksAtualizados
       });
     }
 
