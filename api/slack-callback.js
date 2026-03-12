@@ -42,15 +42,27 @@ module.exports = async (req, res) => {
           return res.status(400).json({ error: 'Missing data' });
         }
 
+        console.log('🤖 BOTÃO IA CLICADO!');
+
+        // ============================================
+        // 1️⃣ RESPONDE SLACK IMEDIATAMENTE (< 3 seg)
+        // ============================================
+        res.status(200).json({
+          replace_original: true,
+          text: "⏳ Processando IA... Por favor, aguarde. Você receberá a resposta em instantes."
+        });
+
+        console.log('✅ Slack respondido - botão atualizado');
+
+        // ============================================
+        // 2️⃣ CHAMA TOQAN EM BACKGROUND (não bloqueia)
+        // ============================================
         const toqanWebhookUrl = process.env.TOQAN_WEBHOOK_URL;
         const toqanSecret = process.env.TOQAN_WEBHOOK_SECRET;
 
-        console.log(`Webhook URL: ${toqanWebhookUrl?.substring(0, 40)}...`);
-        console.log(`Secret: ${toqanSecret?.substring(0, 15)}...`);
-
         if (!toqanWebhookUrl || !toqanSecret) {
           console.error('❌ Variáveis de ambiente não configuradas');
-          return res.status(500).json({ error: 'Server configuration error' });
+          return; // Já respondeu ao Slack, só retorna
         }
 
         const toqanPayload = {
@@ -60,43 +72,33 @@ module.exports = async (req, res) => {
         };
 
         console.log('📤 Payload enviado ao Toqan:', JSON.stringify(toqanPayload));
-        console.log('🤖 Chamando Toqan webhook...');
+        console.log('🤖 Chamando Toqan webhook em background...');
 
-        // ✅ CHAMA TOQAN (MANTÉM FUNCIONANDO)
-        try {
-          const response = await fetch(toqanWebhookUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Webhook-Secret': toqanSecret
-            },
-            body: JSON.stringify(toqanPayload)
-          });
-
-          const responseText = await response.text();
-          
+        // Fire and forget - não espera resposta
+        fetch(toqanWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': toqanSecret
+          },
+          body: JSON.stringify(toqanPayload)
+        })
+        .then(response => {
           console.log(`✅ Toqan respondeu: HTTP ${response.status}`);
-          console.log(`Resposta completa: ${responseText}`);
-
-          if (!response.ok) {
-            console.error(`❌ Toqan retornou erro ${response.status}: ${responseText}`);
-          }
-
-        } catch (fetchError) {
-          console.error('❌ Erro ao chamar Toqan:', fetchError.message);
-          console.error('Stack:', fetchError.stack);
-        }
-
-        console.log('✅ Respondendo ao Slack (TESTE SIMPLIFICADO)');
-
-        // ✅ RESPOSTA SIMPLIFICADA (SÓ PRA TESTAR)
-        return res.status(200).json({
-          replace_original: true,
-          text: "⏳ Processando IA... Por favor, aguarde. Você receberá a resposta em instantes."
+          return response.text();
+        })
+        .then(text => {
+          console.log(`Resposta: ${text}`);
+        })
+        .catch(error => {
+          console.error('❌ Erro ao chamar Toqan:', error.message);
         });
+
+        // Não precisa return aqui, já respondeu acima
+        return;
       }
 
-      // Outros action_ids aqui...
+      // Outros action_ids podem vir aqui no futuro
       console.log('⚠️ action_id não reconhecido:', actionId);
       return res.status(200).json({ ok: true });
     }
